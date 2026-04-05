@@ -1,0 +1,96 @@
+# CI Pipeline — Her push ve pull request'te otomatik çalışır
+# GitHub kendi Ubuntu sunucusunda bu adımları sırayla işletir
+
+name: CI
+
+# Ne zaman çalışsın?
+on:
+  push:
+    branches: [ main, master ]   # main veya master'a push gelince
+  pull_request:
+    branches: [ main, master ]   # bu branch'lere PR açılınca
+
+jobs:
+
+  # ── 1. JOB: Book Service (demo4) ──────────────────────────────────────────
+  book-service:
+    name: Book Service — Build & Test
+    runs-on: ubuntu-latest        # GitHub'ın Ubuntu VM'i
+
+    steps:
+      # 1. Kodu VM'e indir
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Java 21 kur (bizim projemizin versiyonu)
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'   # Eclipse Temurin (açık kaynak JDK)
+
+      # 3. Maven bağımlılıklarını cache'le — her seferinde indirmemek için
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('demo4/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      # 4. Derle ve testleri çalıştır
+      - name: Build & Test
+        working-directory: demo4   # bu klasörde çalış
+        run: ./mvnw verify -q      # compile + test + package
+
+  # ── 2. JOB: Author Service (demo4-author-service) ─────────────────────────
+  author-service:
+    name: Author Service — Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('demo4-author-service/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Build & Test
+        working-directory: demo4-author-service
+        run: mvn verify -q         # author-service'de mvnw yok, mvn kullanıyoruz
+
+  # ── 3. JOB: Frontend (demo4-frontend) ─────────────────────────────────────
+  frontend:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Node.js kur
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: demo4-frontend/package-lock.json
+
+      # Bağımlılıkları yükle
+      - name: Install dependencies
+        working-directory: demo4-frontend
+        run: npm ci               # npm install'dan fark: package-lock.json'u kesin kullanır
+
+      # Production build al — hata varsa CI başarısız olur
+      - name: Build
+        working-directory: demo4-frontend
+        run: npm run build
