@@ -1,96 +1,105 @@
-# CI Pipeline — Her push ve pull request'te otomatik çalışır
-# GitHub kendi Ubuntu sunucusunda bu adımları sırayla işletir
+# CI/CD Pipeline — Build, test, Docker Hub'a push, EC2'ya deploy
+name: CI/CD
 
-name: CI
-
-# Ne zaman çalışsın?
 on:
   push:
-    branches: [ main, master ]   # main veya master'a push gelince
+    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]   # bu branch'lere PR açılınca
+    branches: [ main, master ]
 
 jobs:
 
-  # ── 1. JOB: Book Service (demo4) ──────────────────────────────────────────
-  book-service:
-    name: Book Service — Build & Test
-    runs-on: ubuntu-latest        # GitHub'ın Ubuntu VM'i
-
+  # ── 1. JOB: Book Service — Test ────────────────────────────────────────────
+  book-service-test:
+    name: Book Service — Test
+    runs-on: ubuntu-latest
     steps:
-      # 1. Kodu VM'e indir
-      - name: Checkout code
-        uses: actions/checkout@v4.2.2
-
-      # 2. Java 21 kur (bizim projemizin versiyonu)
-      - name: Set up Java 21
-        uses: actions/setup-java@v4.7.0
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.0
         with:
           java-version: '21'
-          distribution: 'temurin'   # Eclipse Temurin (açık kaynak JDK)
-
-      # 3. Maven bağımlılıklarını cache'le — her seferinde indirmemek için
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4.2.3
+          distribution: 'temurin'
+      - uses: actions/cache@v4.2.3
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('demo4/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
+      - name: Test
+        working-directory: demo4
+        run: ./mvnw verify -q
 
-      # 4. Derle ve testleri çalıştır
-      - name: Build & Test
-        working-directory: demo4   # bu klasörde çalış
-        run: ./mvnw verify -q      # compile + test + package
-
-  # ── 2. JOB: Author Service (demo4-author-service) ─────────────────────────
-  author-service:
-    name: Author Service — Build & Test
+  # ── 2. JOB: Author Service — Test ─────────────────────────────────────────
+  author-service-test:
+    name: Author Service — Test
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4.2.2
-
-      - name: Set up Java 21
-        uses: actions/setup-java@v4.7.0
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-java@v4.7.0
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4.2.3
+      - uses: actions/cache@v4.2.3
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('demo4-author-service/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
-
-      - name: Build & Test
+      - name: Test
         working-directory: demo4-author-service
-        run: mvn verify -q         # author-service'de mvnw yok, mvn kullanıyoruz
+        run: mvn verify -q
 
-  # ── 3. JOB: Frontend (demo4-frontend) ─────────────────────────────────────
-  frontend:
-    name: Frontend — Build
+  # ── 3. JOB: Docker Build & Push — sadece main'e push'ta çalışır ───────────
+  docker-build-push:
+    name: Docker Build & Push
     runs-on: ubuntu-latest
+    needs: [ book-service-test, author-service-test ]  # testler geçmeden build etme
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v4.2.2
 
-      # Node.js kur
-      - name: Set up Node.js
-        uses: actions/setup-node@v4.3.0
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: demo4-frontend/package-lock.json
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Bağımlılıkları yükle
-      - name: Install dependencies
-        working-directory: demo4-frontend
-        run: npm install
+      # Book Service image build & push
+      - name: Build & Push Book Service
+        uses: docker/build-push-action@v6
+        with:
+          context: demo4
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest
 
-      # Production build al — CI=false: ESLint warning'leri hataya dönüştürme
-      - name: Build
-        working-directory: demo4-frontend
-        run: CI=false npm run build
+      # Frontend image build & push (API URL'i build sırasında gömülür)
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: demo4-frontend
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:latest
+          build-args: |
+            REACT_APP_API_URL=http://${{ secrets.EC2_HOST }}:8080
+
+  # ── 4. JOB: EC2'ya Deploy ─────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: docker-build-push   # image'lar push'lanmadan deploy etme
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/spring_demos
+            git pull
+            cd demo4
+            sudo docker-compose pull
+            sudo docker-compose up -d
+            sudo docker image prune -f

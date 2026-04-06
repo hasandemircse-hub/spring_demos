@@ -15,7 +15,7 @@ services:
 
   # Spring Boot uygulama container'ı
   app:
-    build: .              # Dockerfile'ı bu klasörde ara
+    image: ${DOCKERHUB_USERNAME:-hasandemircse}/spring-demos-app:latest
     container_name: demo4-app
     ports:
       - "8080:8080"
@@ -25,17 +25,14 @@ services:
       SPRING_DATASOURCE_USERNAME: "demo4user"
       SPRING_DATASOURCE_PASSWORD: "demo4pass"
     depends_on:
-      - postgres           # postgres ayağa kalkmadan app başlama
+      - postgres
 
   # React frontend container'ı
   frontend:
-    build:
-      context: ../demo4-frontend
-      args:
-        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8080}
+    image: ${DOCKERHUB_USERNAME:-hasandemircse}/spring-demos-frontend:latest
     container_name: demo4-frontend
     ports:
-      - "3000:80"          # host:container — nginx 80'de çalışır, dışarı 3000 olarak açılır
+      - "3000:80"
     depends_on:
       - app
 
