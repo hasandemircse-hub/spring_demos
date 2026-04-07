@@ -57,27 +57,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
 
+      # Deploy tarihi ve saatini üret — image tag'i ve backup dosya adında kullanılır
+      - name: Generate timestamp
+        id: ts
+        run: echo "value=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_OUTPUT
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Book Service image build & push
+      # Book Service: hem latest hem tarihli tag ile push edilir
+      # latest → docker compose pull'un bulduğu tag
+      # tarihli tag → Docker Hub'da kalıcı yedek
       - name: Build & Push Book Service
         uses: docker/build-push-action@v6
         with:
           context: demo4
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:${{ steps.ts.outputs.value }}
 
-      # Frontend image build & push (API URL'i build sırasında gömülür)
+      # Frontend: aynı şekilde iki tag
       - name: Build & Push Frontend
         uses: docker/build-push-action@v6
         with:
           context: demo4-frontend
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:${{ steps.ts.outputs.value }}
           build-args: |
             REACT_APP_API_URL=http://${{ secrets.EC2_HOST }}:8080
 
@@ -97,9 +108,32 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            TIMESTAMP=${{ steps.ts.outputs.value }}
+            BACKUP_DIR=~/docker-backups
+            mkdir -p $BACKUP_DIR
+
+            # ── Yedek al ────────────────────────────────────────────────────────
+            # Yeni image çekilmeden önce mevcut çalışan image'ı tar.gz'e aktar
+            # docker save → image'ı stdout'a yazar | gzip → sıkıştır > dosyaya yaz
+            echo "[$TIMESTAMP] Yedek alınıyor..."
+            sudo docker save spring-demos-app:latest   | gzip > $BACKUP_DIR/app-$TIMESTAMP.tar.gz
+            sudo docker save spring-demos-frontend:latest | gzip > $BACKUP_DIR/frontend-$TIMESTAMP.tar.gz
+
+            # ── Son 3 yedeği tut, eskileri sil ──────────────────────────────────
+            # ls -t → tarihe göre sırala (en yeni başta)
+            # tail -n +4 → 4. satırdan sonrasını al (ilk 3'ü atla)
+            # xargs -r rm → gelen dosyaları sil (-r: dosya yoksa hata verme)
+            ls -t $BACKUP_DIR/app-*.tar.gz      | tail -n +4 | xargs -r rm
+            ls -t $BACKUP_DIR/frontend-*.tar.gz | tail -n +4 | xargs -r rm
+            echo "Yedekler temizlendi. Kalan yedekler:"
+            ls -lh $BACKUP_DIR
+
+            # ── Deploy ──────────────────────────────────────────────────────────
             cd ~/spring_demos
             git pull
             cd demo4
             sudo docker compose pull
             CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }}:3000 sudo -E docker compose up -d
+
+            # Sadece tag'siz (dangling) image'ları sil — yedekli tag'ler korunur
             sudo docker image prune -f
