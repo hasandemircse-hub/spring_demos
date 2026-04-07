@@ -152,7 +152,7 @@ jobs:
             git pull
             cd demo4
             sudo docker compose pull
-            CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }}:3000 sudo -E docker compose up -d
+            CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d
 
             # Sadece tag'siz (dangling) image'ları sil — yedekli tag'ler korunur
             sudo docker image prune -f

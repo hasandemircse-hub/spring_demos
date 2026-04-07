@@ -31,7 +31,7 @@ services:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/demo4db"
       SPRING_DATASOURCE_USERNAME: "demo4user"
       SPRING_DATASOURCE_PASSWORD: "demo4pass"
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
       # docker-compose içinde servis adı hostname olarak kullanılır
       AUTHOR_SERVICE_URL: "http://author:8081"
     depends_on:
@@ -43,7 +43,7 @@ services:
     image: ${DOCKERHUB_USERNAME:-hasandemircse}/spring-demos-frontend:latest
     container_name: demo4-frontend
     ports:
-      - "3000:80"
+      - "80:80"
     depends_on:
       - app
 
