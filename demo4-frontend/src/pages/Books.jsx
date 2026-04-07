@@ -7,18 +7,32 @@ export default function Books() {
     const [loading, setLoading] = useState(false);
     const [page, setPage] = useState(0);
     const [size] = useState(10);
+    const [sortBy, setSortBy] = useState('id');
+    const [sortDir, setSortDir] = useState('asc');
     const navigate = useNavigate();
 
     useEffect(() => {
         setLoading(true);
-        api.get(`/api/books/paged?page=${page}&size=${size}&sortBy=title`)
+        api.get(`/api/books/paged?page=${page}&size=${size}&sortBy=${sortBy}&sortDir=${sortDir}`)
             .then(res => setData(res.data))
             .catch(() => {
                 localStorage.removeItem('token');
                 navigate('/login');
             })
             .finally(() => setLoading(false));
-    }, [page, navigate, size]);
+    }, [page, size, sortBy, sortDir, navigate]);
+
+    const handleSort = (column) => {
+        if (column === sortBy) {
+            // Aynı sütun: yönü tersine çevir
+            setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        } else {
+            // Farklı sütun: yeni sütun, yön sıfırla
+            setSortBy(column);
+            setSortDir('asc');
+        }
+        setPage(0);
+    };
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -49,9 +63,15 @@ export default function Books() {
                     </colgroup>
                     <thead>
                         <tr>
-                            <th style={styles.th}>#</th>
-                            <th style={styles.th}>Başlık</th>
-                            <th style={styles.th}>Yazar</th>
+                            <th style={{...styles.th, ...styles.thClickable}} onClick={() => handleSort('id')}>
+                                # {sortBy === 'id' && (sortDir === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th style={{...styles.th, ...styles.thClickable}} onClick={() => handleSort('title')}>
+                                Başlık {sortBy === 'title' && (sortDir === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th style={{...styles.th, ...styles.thClickable}} onClick={() => handleSort('author')}>
+                                Yazar {sortBy === 'author' && (sortDir === 'asc' ? '▲' : '▼')}
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -93,6 +113,7 @@ const styles = {
     info: { color: '#666', marginBottom: '16px', fontSize: '14px' },
     table: { width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
     th: { backgroundColor: '#4f46e5', color: 'white', padding: '12px 16px', textAlign: 'left' },
+    thClickable: { cursor: 'pointer', userSelect: 'none' },
     tr: { borderBottom: '1px solid #eee' },
     td: { padding: '12px 16px', color: '#333' },
     pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '24px' },

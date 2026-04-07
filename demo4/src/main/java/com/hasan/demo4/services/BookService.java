@@ -1,6 +1,8 @@
 package com.hasan.demo4.services;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +26,7 @@ import com.hasan.demo4.dto.PageResponseDto;
 import com.hasan.demo4.entities.Book;
 import com.hasan.demo4.exception.ResourceNotFoundException;
 import com.hasan.demo4.repositories.BookRepository;
+import com.hasan.demo4.strategy.BookSortStrategy;
 
 @Service
 public class BookService {
@@ -38,13 +41,25 @@ public class BookService {
     // --- RestTemplate: klasik HTTP istemcisi, elle URL + çağrı yazılır ---
     private final RestTemplate restTemplate;
 
+    // Strategy Pattern: name → strateji haritası
+    // Spring tüm BookSortStrategy bean'lerini otomatik inject eder
+    private final Map<String, BookSortStrategy> sortStrategies;
+
     @Value("${author.service.url:http://localhost:8081}")
     private String authorServiceUrl;
 
-    public BookService(BookRepository repository, AuthorClient authorClient, RestTemplate restTemplate) {
+    // prod → PostgreSQL ICU collation, dev → H2 COLLATION=TURKISH (URL'den)
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
+
+    public BookService(BookRepository repository, AuthorClient authorClient, RestTemplate restTemplate,
+                       List<BookSortStrategy> strategies) {
         this.repository = repository;
         this.authorClient = authorClient;
         this.restTemplate = restTemplate;
+        // Her stratejinin getName() değerini anahtar olarak kullan
+        this.sortStrategies = strategies.stream()
+                .collect(Collectors.toMap(BookSortStrategy::getName, s -> s));
     }
 
     @Cacheable("books")
@@ -56,11 +71,30 @@ public class BookService {
                 .toList();
     }
 
-    @Cacheable(value = "books-paged", key = "#page + '-' + #size + '-' + #sortBy")
-    public PageResponseDto<BookResponseDto> getAllPaged(int page, int size, String sortBy) {
-        log.info("[CACHE MISS] getAllPaged → DB'ye gidiliyor (page={}, size={}, sortBy={})", page, size, sortBy);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
-        Page<Book> bookPage = repository.findAll(pageable);
+    @Cacheable(value = "books-paged", key = "#page + '-' + #size + '-' + #sortBy + '-' + #sortDir")
+    public PageResponseDto<BookResponseDto> getAllPaged(int page, int size, String sortBy, String sortDir) {
+        log.info("[CACHE MISS] getAllPaged → DB'ye gidiliyor (page={}, size={}, sortBy={}, sortDir={})", page, size, sortBy, sortDir);
+        Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+
+        Page<Book> bookPage;
+
+        if ("prod".equals(activeProfile) && ("title".equals(sortBy) || "author".equals(sortBy))) {
+            // PostgreSQL: ICU collation ile native query — Türkçe karakter sıralaması doğru
+            // Pageable'a sort vermiyoruz, ORDER BY zaten native query'de var
+            Pageable pageable = PageRequest.of(page, size);
+            bookPage = switch (sortBy + "-" + direction) {
+                case "title-ASC"    -> repository.findAllOrderByTitleAsc(pageable);
+                case "title-DESC"   -> repository.findAllOrderByTitleDesc(pageable);
+                case "author-ASC"   -> repository.findAllOrderByAuthorAsc(pageable);
+                case "author-DESC"  -> repository.findAllOrderByAuthorDesc(pageable);
+                default             -> repository.findAll(pageable);
+            };
+        } else {
+            // H2 (dev): URL'deki COLLATION=TURKISH sayesinde regular Sort yeterli
+            // id gibi sayısal sütunlar için de bu yol kullanılır
+            Sort sort = sortStrategies.getOrDefault(sortBy, sortStrategies.get("id")).getSort(direction);
+            bookPage = repository.findAll(PageRequest.of(page, size, sort));
+        }
         List<BookResponseDto> content = bookPage.getContent()
                 .stream()
                 .map(this::toResponse)
@@ -162,4 +196,6 @@ public class BookService {
         String ownerUsername = book.getOwner() != null ? book.getOwner().getUsername() : null;
         return new BookResponseDto(book.getId(), book.getTitle(), book.getAuthor(), ownerUsername);
     }
+
+
 }

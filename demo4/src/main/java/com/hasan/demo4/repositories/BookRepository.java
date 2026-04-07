@@ -2,7 +2,10 @@ package com.hasan.demo4.repositories;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import com.hasan.demo4.entities.Book;
 
@@ -11,6 +14,26 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     List<Book> findByAuthorIgnoreCase(String author);
 
     List<Book> findByTitleContaining(String keyword);
+
+    // --- PostgreSQL Türkçe sıralama (ICU collation) ---
+    // JPQL COLLATE desteklemez → native query zorunlu
+    // Pageable burada sadece LIMIT/OFFSET için kullanılır, ORDER BY query'den gelir
+
+    @Query(value = "SELECT * FROM book ORDER BY title COLLATE \"tr-TR-x-icu\" ASC",
+           countQuery = "SELECT COUNT(*) FROM book", nativeQuery = true)
+    Page<Book> findAllOrderByTitleAsc(Pageable pageable);
+
+    @Query(value = "SELECT * FROM book ORDER BY title COLLATE \"tr-TR-x-icu\" DESC",
+           countQuery = "SELECT COUNT(*) FROM book", nativeQuery = true)
+    Page<Book> findAllOrderByTitleDesc(Pageable pageable);
+
+    @Query(value = "SELECT * FROM book ORDER BY author COLLATE \"tr-TR-x-icu\" ASC",
+           countQuery = "SELECT COUNT(*) FROM book", nativeQuery = true)
+    Page<Book> findAllOrderByAuthorAsc(Pageable pageable);
+
+    @Query(value = "SELECT * FROM book ORDER BY author COLLATE \"tr-TR-x-icu\" DESC",
+           countQuery = "SELECT COUNT(*) FROM book", nativeQuery = true)
+    Page<Book> findAllOrderByAuthorDesc(Pageable pageable);
 }
 
 /*

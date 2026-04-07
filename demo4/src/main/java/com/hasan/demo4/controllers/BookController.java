@@ -41,14 +41,15 @@ public class BookController {
         return bookService.getAll();
     }
 
-    // GET /api/books/paged?page=0&size=10&sortBy=title
+    // GET /api/books/paged?page=0&size=10&sortBy=title&sortDir=asc
     @GetMapping("/paged")
     public PageResponseDto<BookResponseDto> getAllPaged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "id") String sortBy) {
-        log.info("-->book getAllPaged() page={} size={} sortBy={}", page, size, sortBy);
-        return bookService.getAllPaged(page, size, sortBy);
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        log.info("-->book getAllPaged() page={} size={} sortBy={} sortDir={}", page, size, sortBy, sortDir);
+        return bookService.getAllPaged(page, size, sortBy, sortDir);
     }
 
     @PostMapping
