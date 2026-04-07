@@ -85,6 +85,16 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:${{ steps.ts.outputs.value }}
 
+      # Author Service: aynı şekilde iki tag
+      - name: Build & Push Author Service
+        uses: docker/build-push-action@v6
+        with:
+          context: demo4-author-service
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:${{ steps.ts.outputs.value }}
+
       # Frontend: aynı şekilde iki tag
       - name: Build & Push Frontend
         uses: docker/build-push-action@v6
@@ -124,6 +134,7 @@ jobs:
             # docker save → image'ı stdout'a yazar | gzip → sıkıştır > dosyaya yaz
             echo "[$TIMESTAMP] Yedek alınıyor..."
             sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest     | gzip > $BACKUP_DIR/app-$TIMESTAMP.tar.gz
+            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:latest  | gzip > $BACKUP_DIR/author-$TIMESTAMP.tar.gz
             sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:latest | gzip > $BACKUP_DIR/frontend-$TIMESTAMP.tar.gz
 
             # ── Son 3 yedeği tut, eskileri sil ──────────────────────────────────
@@ -131,6 +142,7 @@ jobs:
             # tail -n +4 → 4. satırdan sonrasını al (ilk 3'ü atla)
             # xargs -r rm → gelen dosyaları sil (-r: dosya yoksa hata verme)
             ls -t $BACKUP_DIR/app-*.tar.gz      | tail -n +4 | xargs -r rm
+            ls -t $BACKUP_DIR/author-*.tar.gz   | tail -n +4 | xargs -r rm
             ls -t $BACKUP_DIR/frontend-*.tar.gz | tail -n +4 | xargs -r rm
             echo "Yedekler temizlendi. Kalan yedekler:"
             ls -lh $BACKUP_DIR
