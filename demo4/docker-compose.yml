@@ -15,14 +15,14 @@ services:
 
   # Author Service container'ı
   author:
-    image: ${DOCKERHUB_USERNAME:-hasandemircse}/spring-demos-author:latest
+    image: ${DOCKERHUB_USERNAME:+$DOCKERHUB_USERNAME/}spring-demos-author:latest
     container_name: demo4-author
     ports:
       - "8081:8081"
 
   # Spring Boot uygulama container'ı
   app:
-    image: ${DOCKERHUB_USERNAME:-hasandemircse}/spring-demos-app:latest
+    image: ${DOCKERHUB_USERNAME:+$DOCKERHUB_USERNAME/}spring-demos-app:latest
     container_name: demo4-app
     ports:
       - "8080:8080"
@@ -40,7 +40,7 @@ services:
 
   # React frontend container'ı
   frontend:
-    image: ${DOCKERHUB_USERNAME:-hasandemircse}/spring-demos-frontend:latest
+    image: ${DOCKERHUB_USERNAME:+$DOCKERHUB_USERNAME/}spring-demos-frontend:latest
     container_name: demo4-frontend
     ports:
       - "80:80"
