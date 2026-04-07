@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -22,7 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-
+import com.hasan.demo4.clients.AuthorClient;
 import com.hasan.demo4.dto.BookRequestDto;
 import com.hasan.demo4.dto.BookResponseDto;
 import com.hasan.demo4.dto.PageResponseDto;
@@ -30,6 +29,9 @@ import com.hasan.demo4.entities.Book;
 import com.hasan.demo4.exception.ResourceNotFoundException;
 import com.hasan.demo4.repositories.BookRepository;
 import com.hasan.demo4.services.BookService;
+import com.hasan.demo4.strategy.AuthorSortStrategy;
+import com.hasan.demo4.strategy.IdSortStrategy;
+import com.hasan.demo4.strategy.TitleSortStrategy;
 
 // @ExtendWith(MockitoExtension.class) → JUnit 5'e "Mockito kullanacağım" der
 // Bu olmadan @Mock ve @InjectMocks anotasyonları çalışmaz
@@ -42,10 +44,12 @@ class BookServiceTest {
     @Mock
     private BookRepository repository;
 
-    // @InjectMocks → BookService'i gerçekten oluşturur
-    // ama constructor'ına yukarıdaki @Mock'u inject eder
-    // yani BookService gerçek, BookRepository sahte
-    @InjectMocks
+    @Mock
+    private AuthorClient authorClient;
+
+    // @InjectMocks yerine manuel oluşturuyoruz:
+    // @InjectMocks List<BookSortStrategy> gibi generic tipler için mock inject edemez.
+    // Bu yüzden gerçek strategy nesnelerini geçirerek BookService'i elle kuruyoruz.
     private BookService bookService;
 
     // Test verilerini burada tanımlıyoruz — her testten önce @BeforeEach ile sıfırlanır
@@ -56,6 +60,13 @@ class BookServiceTest {
     // Her test temiz, bağımsız bir başlangıç noktasından başlar
     @BeforeEach
     void setUp() {
+        bookService = new BookService(
+            repository,
+            authorClient,
+            null, // RestTemplate — Mockito mock'layamıyor, bu testlerde kullanılmıyor
+            List.of(new IdSortStrategy(), new TitleSortStrategy(), new AuthorSortStrategy())
+        );
+
         book = new Book(1L, "Suç ve Ceza", "Dostoyevski");
 
         requestDto = new BookRequestDto();
@@ -235,7 +246,7 @@ class BookServiceTest {
             // any(Pageable.class) → hangi Pageable nesnesi gelirse gelsin mockPage dönsün
             when(repository.findAll(any(Pageable.class))).thenReturn(mockPage);
 
-            PageResponseDto<BookResponseDto> result = bookService.getAllPaged(0, 10, "title");
+            PageResponseDto<BookResponseDto> result = bookService.getAllPaged(0, 10, "title", "asc");
 
             assertThat(result.getContent()).hasSize(1);
             assertThat(result.getTotalElements()).isEqualTo(50);
@@ -254,7 +265,7 @@ class BookServiceTest {
             );
             when(repository.findAll(any(Pageable.class))).thenReturn(emptyPage);
 
-            PageResponseDto<BookResponseDto> result = bookService.getAllPaged(0, 10, "title");
+            PageResponseDto<BookResponseDto> result = bookService.getAllPaged(0, 10, "title", "asc");
 
             assertThat(result.getContent()).isEmpty();
             assertThat(result.getTotalElements()).isZero();
