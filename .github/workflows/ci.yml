@@ -54,6 +54,11 @@ jobs:
     needs: [ book-service-test, author-service-test ]  # testler geçmeden build etme
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
+    # outputs → bu job'daki değerleri deploy job'ına taşır
+    # steps.ts.outputs.value job sınırını geçemez, outputs bloğu köprü görevi görür
+    outputs:
+      timestamp: ${{ steps.ts.outputs.value }}
+
     steps:
       - uses: actions/checkout@v4.2.2
 
@@ -108,7 +113,9 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            TIMESTAMP=${{ steps.ts.outputs.value }}
+            # needs.docker-build-push.outputs.timestamp → job outputs üzerinden gelir
+            # steps.ts.outputs.value deploy job'ında erişilemez, bu yüzden job output kullandık
+            TIMESTAMP=${{ needs.docker-build-push.outputs.timestamp }}
             BACKUP_DIR=~/docker-backups
             mkdir -p $BACKUP_DIR
 
@@ -116,8 +123,8 @@ jobs:
             # Yeni image çekilmeden önce mevcut çalışan image'ı tar.gz'e aktar
             # docker save → image'ı stdout'a yazar | gzip → sıkıştır > dosyaya yaz
             echo "[$TIMESTAMP] Yedek alınıyor..."
-            sudo docker save spring-demos-app:latest   | gzip > $BACKUP_DIR/app-$TIMESTAMP.tar.gz
-            sudo docker save spring-demos-frontend:latest | gzip > $BACKUP_DIR/frontend-$TIMESTAMP.tar.gz
+            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest     | gzip > $BACKUP_DIR/app-$TIMESTAMP.tar.gz
+            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:latest | gzip > $BACKUP_DIR/frontend-$TIMESTAMP.tar.gz
 
             # ── Son 3 yedeği tut, eskileri sil ──────────────────────────────────
             # ls -t → tarihe göre sırala (en yeni başta)
