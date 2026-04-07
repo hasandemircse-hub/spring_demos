@@ -13,6 +13,8 @@ export default function Login() {
         try {
             const response = await api.post('/auth/login', { username, password });
             localStorage.setItem('token', response.data);
+            localStorage.setItem('username', username);
+            localStorage.setItem('loginTime', new Date().toLocaleString('tr-TR'));
             navigate('/dashboard');
         } catch (err) {
             setError('Kullanıcı adı veya şifre hatalı');

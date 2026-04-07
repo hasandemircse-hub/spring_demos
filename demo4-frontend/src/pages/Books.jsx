@@ -34,8 +34,13 @@ export default function Books() {
         setPage(0);
     };
 
+    const username = localStorage.getItem('username');
+    const loginTime = localStorage.getItem('loginTime');
+
     const handleLogout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('username');
+        localStorage.removeItem('loginTime');
         navigate('/login');
     };
 
@@ -46,7 +51,13 @@ export default function Books() {
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Kitaplar</h2>
-                <button style={styles.logoutBtn} onClick={handleLogout}>Çıkış Yap</button>
+                <div style={styles.userInfo}>
+                    <div style={styles.userMeta}>
+                        <span style={styles.userName}>{username}</span>
+                        <span style={styles.loginTime}>Giriş: {loginTime}</span>
+                    </div>
+                    <button style={styles.logoutBtn} onClick={handleLogout}>Çıkış Yap</button>
+                </div>
             </div>
 
             <p style={styles.info}>
@@ -109,6 +120,10 @@ const styles = {
     container: { maxWidth: '800px', margin: '40px auto', padding: '0 20px' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
     title: { color: '#333' },
+    userInfo: { display: 'flex', alignItems: 'center', gap: '16px' },
+    userMeta: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end' },
+    userName: { fontWeight: 'bold', color: '#333', fontSize: '14px' },
+    loginTime: { color: '#888', fontSize: '12px' },
     logoutBtn: { padding: '8px 16px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' },
     info: { color: '#666', marginBottom: '16px', fontSize: '14px' },
     table: { width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
