@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosConfig';
+import PrayerTimes from '../components/PrayerTimes';
 
 export default function Books() {
     const [data, setData] = useState(null);
@@ -48,6 +49,8 @@ export default function Books() {
     if (!data) return <p style={styles.loading}>Yükleniyor...</p>;
 
     return (
+        <div style={styles.wrapper}>
+        <PrayerTimes />
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>Kitaplar</h2>
@@ -113,11 +116,13 @@ export default function Books() {
                 </button>
             </div>
         </div>
+        </div>
     );
 }
 
 const styles = {
-    container: { maxWidth: '800px', margin: '40px auto', padding: '0 20px' },
+    wrapper: { display: 'flex', gap: '24px', margin: '40px auto', padding: '0 20px', maxWidth: '1100px' },
+    container: { flex: 1, minWidth: 0 },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
     title: { color: '#333' },
     userInfo: { display: 'flex', alignItems: 'center', gap: '16px' },
