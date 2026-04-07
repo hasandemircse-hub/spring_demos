@@ -40,48 +40,48 @@ echo ""
 # ── Dosyaları kontrol et ───────────────────────────────────────────────────
 echo "[1/3] Backup dosyaları kontrol ediliyor..."
 
-$SSH "
-    for service in app author frontend; do
-        FILE=$BACKUP_DIR/\${service}-$TIMESTAMP.tar.gz
-        if [ ! -f \$FILE ]; then
-            echo \"HATA: \$FILE bulunamadı\"
-            exit 1
-        fi
-        SIZE=\$(stat -c%s \$FILE)
-        if [ \$SIZE -lt 1000 ]; then
-            echo \"HATA: \$FILE bozuk veya boş (\$SIZE byte)\"
-            exit 1
-        fi
-        echo \"  ✓ \$service: \$(ls -lh \$FILE | awk '{print \$5}')\"
-    done
-"
+$SSH bash << EOF
+for service in app author frontend; do
+    FILE=$BACKUP_DIR/\${service}-${TIMESTAMP}.tar.gz
+    if [ ! -f \$FILE ]; then
+        echo "HATA: \$FILE bulunamadi"
+        exit 1
+    fi
+    SIZE=\$(stat -c%s \$FILE)
+    if [ \$SIZE -lt 1000 ]; then
+        echo "HATA: \$FILE bozuk veya bos (\$SIZE byte)"
+        exit 1
+    fi
+    echo "  ok \$service: \$(ls -lh \$FILE | awk '{print \$5}')"
+done
+EOF
 
 echo ""
 
 # ── Image'ları yükle ───────────────────────────────────────────────────────
-echo "[2/3] Image'lar yükleniyor..."
+echo "[2/3] Image'lar yukleniyor..."
 
-$SSH "
-    gunzip -c $BACKUP_DIR/app-$TIMESTAMP.tar.gz      | sudo docker load
-    gunzip -c $BACKUP_DIR/author-$TIMESTAMP.tar.gz   | sudo docker load
-    gunzip -c $BACKUP_DIR/frontend-$TIMESTAMP.tar.gz | sudo docker load
-    echo '  ✓ Tüm image\'lar yüklendi'
-"
+$SSH bash << EOF
+gunzip -c $BACKUP_DIR/app-${TIMESTAMP}.tar.gz      | sudo docker load
+gunzip -c $BACKUP_DIR/author-${TIMESTAMP}.tar.gz   | sudo docker load
+gunzip -c $BACKUP_DIR/frontend-${TIMESTAMP}.tar.gz | sudo docker load
+echo "  Tum imageler yuklendi"
+EOF
 
 echo ""
 
 # ── Servisleri yeniden başlat ──────────────────────────────────────────────
-echo "[3/3] Servisler yeniden başlatılıyor..."
+echo "[3/3] Servisler yeniden baslatiliyor..."
 
-$SSH "
-    cd $COMPOSE_DIR
-    CORS_ALLOWED_ORIGINS=http://$EC2_HOST sudo -E docker compose up -d
-    sudo docker image prune -f
-"
+$SSH bash << EOF
+cd $COMPOSE_DIR
+CORS_ALLOWED_ORIGINS=http://${EC2_HOST} sudo -E docker compose up -d
+sudo docker image prune -f
+EOF
 
 echo ""
 echo "============================================"
-echo " Rollback tamamlandı: $TIMESTAMP"
+echo " Rollback tamamlandi: $TIMESTAMP"
 echo " Frontend : http://$EC2_HOST"
 echo " Backend  : http://$EC2_HOST:8080"
 echo "============================================"
