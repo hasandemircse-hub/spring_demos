@@ -29,9 +29,10 @@ echo ""
 # ── 1. Local build ─────────────────────────────────────────────────────────
 echo "[1/5] Docker image'ları build ediliyor..."
 
-docker build -t spring-demos-app:latest    ./demo4
-docker build -t spring-demos-author:latest ./demo4-author-service
-docker build -t spring-demos-frontend:latest \
+# --platform linux/amd64 → Mac ARM64'te build edilse de EC2 (AMD64) ile uyumlu image üretir
+docker build --platform linux/amd64 -t spring-demos-app:latest    ./demo4
+docker build --platform linux/amd64 -t spring-demos-author:latest ./demo4-author-service
+docker build --platform linux/amd64 -t spring-demos-frontend:latest \
     --build-arg REACT_APP_API_URL="http://$EC2_HOST:8080" \
     ./demo4-frontend
 
@@ -49,17 +50,34 @@ echo ""
 # ── 3. Mevcut image'ları EC2'da yedekle ───────────────────────────────────
 echo "[3/5] EC2'daki mevcut image'lar yedekleniyor ($TIMESTAMP)..."
 
-# image yoksa docker save hata verir, || true ile geç
-$SSH "
-    sudo docker save spring-demos-app:latest    2>/dev/null | gzip > ~/docker-backups/app-$TIMESTAMP.tar.gz    || true
-    sudo docker save spring-demos-author:latest 2>/dev/null | gzip > ~/docker-backups/author-$TIMESTAMP.tar.gz || true
-    sudo docker save spring-demos-frontend:latest 2>/dev/null | gzip > ~/docker-backups/frontend-$TIMESTAMP.tar.gz || true
+# Her iki isim formatını dene (local: spring-demos-app, CI: hasandemircse/spring-demos-app)
+$SSH 'BACKUP_DIR=~/docker-backups
+TIMESTAMP='"$TIMESTAMP"'
 
-    # Son 3 yedeği tut
-    ls -t ~/docker-backups/app-*.tar.gz      2>/dev/null | tail -n +4 | xargs -r rm
-    ls -t ~/docker-backups/author-*.tar.gz   2>/dev/null | tail -n +4 | xargs -r rm
-    ls -t ~/docker-backups/frontend-*.tar.gz 2>/dev/null | tail -n +4 | xargs -r rm
-"
+backup() {
+    local NAME=$1   # dosya adı prefix (app, author, frontend)
+    local IMG=$2    # denenecek image ismi
+    local IMG2=$3   # alternatif image ismi
+    local OUT=$BACKUP_DIR/${NAME}-${TIMESTAMP}.tar.gz
+    if sudo docker image inspect ${IMG}:latest > /dev/null 2>&1; then
+        sudo docker save ${IMG}:latest | gzip > $OUT
+    elif sudo docker image inspect ${IMG2}:latest > /dev/null 2>&1; then
+        sudo docker save ${IMG2}:latest | gzip > $OUT
+    else
+        echo "  ! ${NAME} image bulunamadı, yedek atlanıyor"
+        return
+    fi
+    echo "  ✓ ${NAME}: $(ls -lh $OUT | awk '"'"'{print $5}'"'"')"
+}
+
+backup app      spring-demos-app      hasandemircse/spring-demos-app
+backup author   spring-demos-author   hasandemircse/spring-demos-author
+backup frontend spring-demos-frontend hasandemircse/spring-demos-frontend
+
+ls -t $BACKUP_DIR/app-*.tar.gz      2>/dev/null | tail -n +4 | xargs -r rm
+ls -t $BACKUP_DIR/author-*.tar.gz   2>/dev/null | tail -n +4 | xargs -r rm
+ls -t $BACKUP_DIR/frontend-*.tar.gz 2>/dev/null | tail -n +4 | xargs -r rm
+'
 
 echo "      Yedek alındı."
 echo ""
