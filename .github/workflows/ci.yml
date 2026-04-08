@@ -188,11 +188,11 @@ jobs:
 
             SERVICE=${{ inputs.service || 'all' }}
             if [ "$SERVICE" = "all" ]; then
-                sudo docker compose pull
-                CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d
+                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} sudo -E docker compose pull
+                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d
             else
-                sudo docker compose pull $SERVICE
-                CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d --no-deps $SERVICE
+                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} sudo -E docker compose pull $SERVICE
+                DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d --no-deps $SERVICE
             fi
 
             sudo docker image prune -f
