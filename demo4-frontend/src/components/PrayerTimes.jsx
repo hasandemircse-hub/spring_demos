@@ -57,7 +57,7 @@ export default function PrayerTimes() {
 
     return (
         <div style={styles.panel}>
-            <h3 style={styles.title}>Namaz Vakitleri V10</h3>
+            <h3 style={styles.title}>Namaz Vakitleri V11</h3>
 
             <select
                 style={styles.select}
