@@ -1,7 +1,9 @@
 #!/bin/bash
-# Belirtilen tarihli backup'ı EC2'ya yükler ve servisi yeniden başlatır
-# Kullanım: ./rollback.sh
-# Veya:     ./rollback.sh 2026-04-07-0950
+# LOCAL'DEN çalıştırılır — SSH ile EC2'ya bağlanır
+# Kullanım:
+#   ./rollback.sh                        → backup listeler, timestamp sorar
+#   ./rollback.sh 2026-04-07-0950        → direkt timestamp ile
+#   EC2_HOST=1.2.3.4 ./rollback.sh      → IP sormadan
 
 set -e
 
@@ -25,7 +27,6 @@ $SSH "ls -lh $BACKUP_DIR/app-*.tar.gz 2>/dev/null | awk '{print \$5, \$9}' | sed
     | nl -w2 -s') '
 echo ""
 
-# ── Timestamp seç ──────────────────────────────────────────────────────────
 TIMESTAMP="${1:-}"
 if [ -z "$TIMESTAMP" ]; then
     read -p "Hangi timestamp'e rollback yapmak istiyorsun? (örn: 2026-04-07-0950): " TIMESTAMP
@@ -37,9 +38,7 @@ echo " Rollback: $TIMESTAMP"
 echo "============================================"
 echo ""
 
-# ── Dosyaları kontrol et ───────────────────────────────────────────────────
 echo "[1/3] Backup dosyaları kontrol ediliyor..."
-
 $SSH bash << EOF
 for service in app author frontend; do
     FILE=$BACKUP_DIR/\${service}-${TIMESTAMP}.tar.gz
@@ -57,22 +56,15 @@ done
 EOF
 
 echo ""
-
-# ── Image'ları yükle ───────────────────────────────────────────────────────
 echo "[2/3] Image'lar yukleniyor..."
-
 $SSH bash << EOF
 gunzip -c $BACKUP_DIR/app-${TIMESTAMP}.tar.gz      | sudo docker load
 gunzip -c $BACKUP_DIR/author-${TIMESTAMP}.tar.gz   | sudo docker load
 gunzip -c $BACKUP_DIR/frontend-${TIMESTAMP}.tar.gz | sudo docker load
-echo "  Tum imageler yuklendi"
 EOF
 
 echo ""
-
-# ── Servisleri yeniden başlat ──────────────────────────────────────────────
 echo "[3/3] Servisler yeniden baslatiliyor..."
-
 $SSH bash << EOF
 cd $COMPOSE_DIR
 CORS_ALLOWED_ORIGINS=http://${EC2_HOST} sudo -E docker compose up -d
