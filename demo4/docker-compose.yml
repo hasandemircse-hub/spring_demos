@@ -16,7 +16,7 @@ services:
 
   # Author Service container'ı
   author:
-    image: ${DOCKERHUB_USERNAME:+$DOCKERHUB_USERNAME/}spring-demos-author:latest
+    image: hasandemircse/spring-demos-author:latest
     container_name: demo4-author
     restart: unless-stopped
     ports:
@@ -24,7 +24,7 @@ services:
 
   # Spring Boot uygulama container'ı
   app:
-    image: ${DOCKERHUB_USERNAME:+$DOCKERHUB_USERNAME/}spring-demos-app:latest
+    image: hasandemircse/spring-demos-app:latest
     container_name: demo4-app
     restart: unless-stopped
     ports:
@@ -43,7 +43,7 @@ services:
 
   # React frontend container'ı
   frontend:
-    image: ${DOCKERHUB_USERNAME:+$DOCKERHUB_USERNAME/}spring-demos-frontend:latest
+    image: hasandemircse/spring-demos-frontend:latest
     container_name: demo4-frontend
     restart: unless-stopped
     ports:

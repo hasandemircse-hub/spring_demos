@@ -177,13 +177,12 @@ jobs:
             mkdir -p $BACKUP_DIR
 
             # ── Docker Hub login ─────────────────────────────────────────────
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "$DOCKERHUB_USER" --password-stdin
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
             # ── Yedek al (varsa) ─────────────────────────────────────────────
-            TIMESTAMP=${{ needs.docker-build-push.outputs.timestamp }}
             for svc in app author frontend; do
-                if sudo docker image inspect $DOCKERHUB_USER/spring-demos-$svc:latest > /dev/null 2>&1; then
-                    sudo docker save $DOCKERHUB_USER/spring-demos-$svc:latest | gzip -1 > $BACKUP_DIR/$svc-$TIMESTAMP.tar.gz
+                if sudo docker image inspect hasandemircse/spring-demos-$svc:latest > /dev/null 2>&1; then
+                    sudo docker save hasandemircse/spring-demos-$svc:latest | gzip -1 > $BACKUP_DIR/$svc-$TIMESTAMP.tar.gz
                 fi
                 ls -t $BACKUP_DIR/$svc-*.tar.gz 2>/dev/null | tail -n +3 | xargs -r rm
             done
@@ -191,16 +190,14 @@ jobs:
             # ── Deploy ───────────────────────────────────────────────────────
             cd ~/spring_demos && git pull && cd demo4
 
-            export DOCKERHUB_USERNAME=$DOCKERHUB_USER
-            export CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }}
-
             SERVICE=${{ inputs.service || 'all' }}
+            CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }}
             if [ "$SERVICE" = "all" ]; then
-                sudo -E docker compose pull
-                sudo -E docker compose up -d
+                sudo docker compose pull
+                CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS sudo -E docker compose up -d
             else
-                sudo -E docker compose pull $SERVICE
-                sudo -E docker compose up -d --no-deps $SERVICE
+                sudo docker compose pull $SERVICE
+                CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS sudo -E docker compose up -d --no-deps $SERVICE
             fi
 
             sudo docker image prune -f
