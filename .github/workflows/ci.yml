@@ -1,4 +1,4 @@
-# CI/CD Pipeline — Build, test, Docker Hub'a push, EC2'ya deploy 111
+# CI/CD Pipeline — Build, test, Docker Hub'a push, EC2'ya deploy
 name: CI/CD
 
 on:
@@ -6,7 +6,6 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  # Elle tetikleme — ci-deploy.sh bu yolu kullanır
   workflow_dispatch:
     inputs:
       service:
@@ -18,10 +17,37 @@ on:
 
 jobs:
 
+  # ── 0. JOB: Hangi servisler değişti? ──────────────────────────────────────
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      app:      ${{ steps.filter.outputs.app }}
+      author:   ${{ steps.filter.outputs.author }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'demo4/**'
+            author:
+              - 'demo4-author-service/**'
+            frontend:
+              - 'demo4-frontend/**'
+
   # ── 1. JOB: Book Service — Test ────────────────────────────────────────────
   book-service-test:
     name: Book Service — Test
     runs-on: ubuntu-latest
+    needs: detect-changes
+    # Sadece demo4/ değiştiyse VEYA elle app/all seçildiyse çalış
+    if: |
+      needs.detect-changes.outputs.app == 'true' ||
+      inputs.service == 'app' ||
+      inputs.service == 'all'
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: actions/setup-java@v4.7.0
@@ -41,6 +67,12 @@ jobs:
   author-service-test:
     name: Author Service — Test
     runs-on: ubuntu-latest
+    needs: detect-changes
+    # Sadece demo4-author-service/ değiştiyse VEYA elle author/all seçildiyse çalış
+    if: |
+      needs.detect-changes.outputs.author == 'true' ||
+      inputs.service == 'author' ||
+      inputs.service == 'all'
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: actions/setup-java@v4.7.0
@@ -56,22 +88,21 @@ jobs:
         working-directory: demo4-author-service
         run: mvn verify -q
 
-  # ── 3. JOB: Docker Build & Push — sadece main'e push'ta çalışır ───────────
+  # ── 3. JOB: Docker Build & Push ───────────────────────────────────────────
   docker-build-push:
     name: Docker Build & Push
     runs-on: ubuntu-latest
-    needs: [ book-service-test, author-service-test ]  # testler geçmeden build etme
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    # outputs → bu job'daki değerleri deploy job'ına taşır
-    # steps.ts.outputs.value job sınırını geçemez, outputs bloğu köprü görevi görür
+    needs: [ detect-changes, book-service-test, author-service-test ]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      !contains(needs.*.result, 'failure')
     outputs:
       timestamp: ${{ steps.ts.outputs.value }}
-
     steps:
       - uses: actions/checkout@v4.2.2
 
-      # Deploy tarihi ve saatini üret — image tag'i ve backup dosya adında kullanılır
       - name: Generate timestamp
         id: ts
         run: echo "value=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_OUTPUT
@@ -82,10 +113,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # service input'u yoksa (normal push) hepsini build et
-      # service=app veya all ise build et
       - name: Build & Push Book Service
-        if: ${{ !inputs.service || inputs.service == 'all' || inputs.service == 'app' }}
+        if: |
+          needs.detect-changes.outputs.app == 'true' ||
+          inputs.service == 'app' ||
+          inputs.service == 'all'
         uses: docker/build-push-action@v6
         with:
           context: demo4
@@ -95,7 +127,10 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:${{ steps.ts.outputs.value }}
 
       - name: Build & Push Author Service
-        if: ${{ !inputs.service || inputs.service == 'all' || inputs.service == 'author' }}
+        if: |
+          needs.detect-changes.outputs.author == 'true' ||
+          inputs.service == 'author' ||
+          inputs.service == 'all'
         uses: docker/build-push-action@v6
         with:
           context: demo4-author-service
@@ -105,7 +140,10 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:${{ steps.ts.outputs.value }}
 
       - name: Build & Push Frontend
-        if: ${{ !inputs.service || inputs.service == 'all' || inputs.service == 'frontend' }}
+        if: |
+          needs.detect-changes.outputs.frontend == 'true' ||
+          inputs.service == 'frontend' ||
+          inputs.service == 'all'
         uses: docker/build-push-action@v6
         with:
           context: demo4-frontend
@@ -120,7 +158,8 @@ jobs:
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: docker-build-push   # image'lar push'lanmadan deploy etme
+    needs: [ detect-changes, docker-build-push ]
+    if: always() && needs.docker-build-push.result == 'success'
 
     steps:
       - uses: actions/checkout@v4.2.2
@@ -132,31 +171,19 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # needs.docker-build-push.outputs.timestamp → job outputs üzerinden gelir
-            # steps.ts.outputs.value deploy job'ında erişilemez, bu yüzden job output kullandık
             TIMESTAMP=${{ needs.docker-build-push.outputs.timestamp }}
             BACKUP_DIR=~/docker-backups
             mkdir -p $BACKUP_DIR
 
-            # ── Yedek al ────────────────────────────────────────────────────────
-            # Yeni image çekilmeden önce mevcut çalışan image'ı tar.gz'e aktar
-            # docker save → image'ı stdout'a yazar | gzip → sıkıştır > dosyaya yaz
             echo "[$TIMESTAMP] Yedek alınıyor..."
-            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest     | gzip > $BACKUP_DIR/app-$TIMESTAMP.tar.gz
-            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:latest  | gzip > $BACKUP_DIR/author-$TIMESTAMP.tar.gz
-            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:latest | gzip > $BACKUP_DIR/frontend-$TIMESTAMP.tar.gz
+            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest      | gzip -1 > $BACKUP_DIR/app-$TIMESTAMP.tar.gz
+            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:latest   | gzip -1 > $BACKUP_DIR/author-$TIMESTAMP.tar.gz
+            sudo docker save ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-frontend:latest | gzip -1 > $BACKUP_DIR/frontend-$TIMESTAMP.tar.gz
 
-            # ── Son 3 yedeği tut, eskileri sil ──────────────────────────────────
-            # ls -t → tarihe göre sırala (en yeni başta)
-            # tail -n +4 → 4. satırdan sonrasını al (ilk 3'ü atla)
-            # xargs -r rm → gelen dosyaları sil (-r: dosya yoksa hata verme)
-            ls -t $BACKUP_DIR/app-*.tar.gz      | tail -n +4 | xargs -r rm
-            ls -t $BACKUP_DIR/author-*.tar.gz   | tail -n +4 | xargs -r rm
-            ls -t $BACKUP_DIR/frontend-*.tar.gz | tail -n +4 | xargs -r rm
-            echo "Yedekler temizlendi. Kalan yedekler:"
-            ls -lh $BACKUP_DIR
+            ls -t $BACKUP_DIR/app-*.tar.gz      | tail -n +3 | xargs -r rm
+            ls -t $BACKUP_DIR/author-*.tar.gz   | tail -n +3 | xargs -r rm
+            ls -t $BACKUP_DIR/frontend-*.tar.gz | tail -n +3 | xargs -r rm
 
-            # ── Deploy ──────────────────────────────────────────────────────────
             cd ~/spring_demos && git pull && cd demo4
 
             SERVICE=${{ inputs.service || 'all' }}
