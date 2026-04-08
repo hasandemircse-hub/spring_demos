@@ -6,6 +6,15 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  # Elle tetikleme — ci-deploy.sh bu yolu kullanır
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Deploy edilecek servis (app, author, frontend, all)'
+        required: true
+        default: 'all'
+        type: choice
+        options: [ all, app, author, frontend ]
 
 jobs:
 
@@ -73,10 +82,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Book Service: hem latest hem tarihli tag ile push edilir
-      # latest → docker compose pull'un bulduğu tag
-      # tarihli tag → Docker Hub'da kalıcı yedek
+      # service input'u yoksa (normal push) hepsini build et
+      # service=app veya all ise build et
       - name: Build & Push Book Service
+        if: ${{ !inputs.service || inputs.service == 'all' || inputs.service == 'app' }}
         uses: docker/build-push-action@v6
         with:
           context: demo4
@@ -85,8 +94,8 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-app:${{ steps.ts.outputs.value }}
 
-      # Author Service: aynı şekilde iki tag
       - name: Build & Push Author Service
+        if: ${{ !inputs.service || inputs.service == 'all' || inputs.service == 'author' }}
         uses: docker/build-push-action@v6
         with:
           context: demo4-author-service
@@ -95,8 +104,8 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/spring-demos-author:${{ steps.ts.outputs.value }}
 
-      # Frontend: aynı şekilde iki tag
       - name: Build & Push Frontend
+        if: ${{ !inputs.service || inputs.service == 'all' || inputs.service == 'frontend' }}
         uses: docker/build-push-action@v6
         with:
           context: demo4-frontend
@@ -148,11 +157,15 @@ jobs:
             ls -lh $BACKUP_DIR
 
             # ── Deploy ──────────────────────────────────────────────────────────
-            cd ~/spring_demos
-            git pull
-            cd demo4
-            sudo docker compose pull
-            CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d
+            cd ~/spring_demos && git pull && cd demo4
 
-            # Sadece tag'siz (dangling) image'ları sil — yedekli tag'ler korunur
+            SERVICE=${{ inputs.service || 'all' }}
+            if [ "$SERVICE" = "all" ]; then
+                sudo docker compose pull
+                CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d
+            else
+                sudo docker compose pull $SERVICE
+                CORS_ALLOWED_ORIGINS=http://${{ secrets.EC2_HOST }} sudo -E docker compose up -d --no-deps $SERVICE
+            fi
+
             sudo docker image prune -f
