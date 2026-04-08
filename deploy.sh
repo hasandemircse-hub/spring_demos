@@ -78,15 +78,15 @@ backup_service() {
 BACKUP_DIR=~/docker-backups
 OUT=\$BACKUP_DIR/${SERVICE}-${TIMESTAMP}.tar.gz
 if sudo docker image inspect ${IMAGE}:latest > /dev/null 2>&1; then
-    sudo docker save ${IMAGE}:latest | gzip > \$OUT
+    sudo docker save ${IMAGE}:latest | gzip -1 > \$OUT
     echo "  ✓ ${SERVICE} yedeklendi: \$(ls -lh \$OUT | awk '{print \$5}')"
 elif sudo docker image inspect hasandemircse/${IMAGE}:latest > /dev/null 2>&1; then
-    sudo docker save hasandemircse/${IMAGE}:latest | gzip > \$OUT
+    sudo docker save hasandemircse/${IMAGE}:latest | gzip -1 > \$OUT
     echo "  ✓ ${SERVICE} yedeklendi: \$(ls -lh \$OUT | awk '{print \$5}')"
 else
     echo "  ! ${SERVICE} image bulunamadi, yedek atlaniyor"
 fi
-ls -t \$BACKUP_DIR/${SERVICE}-*.tar.gz 2>/dev/null | tail -n +4 | xargs -r rm
+ls -t \$BACKUP_DIR/${SERVICE}-*.tar.gz 2>/dev/null | tail -n +3 | xargs -r rm
 EOF
 }
 
