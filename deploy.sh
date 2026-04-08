@@ -99,7 +99,21 @@ sudo docker image prune -f
 EOF
 }
 
-# ── 1. Build ───────────────────────────────────────────────────────────────
+# ── 1. Ön kontrol ─────────────────────────────────────────────────────────
+# Frontend değişiyorsa build öncesi syntax/lint kontrolü yap
+if echo "$SERVICES" | grep -qw "frontend"; then
+    echo "[0/4] Frontend lint & build kontrolü yapılıyor..."
+    cd demo4-frontend && npm run build > /dev/null 2>&1 && cd ..
+    if [ $? -ne 0 ]; then
+        echo "HATA: Frontend build başarısız — deploy iptal edildi"
+        echo "Detay için: cd demo4-frontend && npm run build"
+        exit 1
+    fi
+    echo "      ✓ Frontend build kontrolü geçti."
+    echo ""
+fi
+
+# ── 2. Build ───────────────────────────────────────────────────────────────
 echo "[1/4] Build ediliyor..."
 for SERVICE in $SERVICES; do
     build_service $SERVICE

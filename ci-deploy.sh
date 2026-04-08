@@ -29,6 +29,19 @@ if ! command -v gh &> /dev/null; then
     exit 1
 fi
 
+# ── Frontend lint & build kontrolü ────────────────────────────────────────
+if [ "$SERVICE" = "frontend" ] || [ "$SERVICE" = "all" ]; then
+    echo "Frontend lint & build kontrolü yapılıyor..."
+    cd demo4-frontend && npm run build > /dev/null 2>&1 && cd ..
+    if [ $? -ne 0 ]; then
+        echo "HATA: Frontend build başarısız — deploy iptal edildi"
+        echo "Detay için: cd demo4-frontend && npm run build"
+        exit 1
+    fi
+    echo "✓ Frontend build kontrolü geçti."
+    echo ""
+fi
+
 echo ""
 echo "============================================"
 echo " GitHub Actions tetikleniyor"
