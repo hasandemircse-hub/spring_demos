@@ -1,7 +1,9 @@
 package com.hasan.authorservice.controllers;
 
+import com.hasan.authorservice.dto.AuthorRequestDto;
 import com.hasan.authorservice.dto.AuthorResponseDto;
 import com.hasan.authorservice.services.AuthorService;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,10 +28,26 @@ public class AuthorController {
         return authorService.getById(id);
     }
 
-    // Book Service bu endpoint'i çağıracak — yazar adına göre bilgi al
     @GetMapping("/search")
     public AuthorResponseDto getByName(@RequestParam String name) {
         return authorService.getByName(name)
                 .orElseThrow(() -> new RuntimeException("Yazar bulunamadı: " + name));
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public AuthorResponseDto create(@RequestBody AuthorRequestDto request) {
+        return authorService.create(request);
+    }
+
+    @PutMapping("/{id}")
+    public AuthorResponseDto update(@PathVariable Long id, @RequestBody AuthorRequestDto request) {
+        return authorService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        authorService.delete(id);
     }
 }

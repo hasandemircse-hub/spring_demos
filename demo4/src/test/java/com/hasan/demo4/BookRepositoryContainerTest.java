@@ -13,7 +13,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.hasan.demo4.entities.Author;
 import com.hasan.demo4.entities.Book;
+import com.hasan.demo4.repositories.AuthorRepository;
 import com.hasan.demo4.repositories.BookRepository;
 
 @SpringBootTest
@@ -37,9 +39,16 @@ class BookRepositoryContainerTest {
     @Autowired
     private BookRepository repository;
 
+    @Autowired
+    private AuthorRepository authorRepository;
+
     @Test
     void shouldSaveAndFindBook_withRealPostgres() {
-        repository.save(new Book(null, "Gerçek DB Kitabı", "Yazar"));
+        Author author = authorRepository.save(new Author("Yazar"));
+        Book book = new Book();
+        book.setTitle("Gerçek DB Kitabı");
+        book.setAuthor(author);
+        repository.save(book);
 
         List<Book> books = repository.findAll();
 
@@ -49,10 +58,14 @@ class BookRepositoryContainerTest {
 
     @Test
     void shouldFindByAuthor_withRealPostgres() {
-        repository.save(new Book(null, "Suç ve Ceza", "Dostoyevski"));
-        repository.save(new Book(null, "Budala", "Dostoyevski"));
+        Author dostoyevski = authorRepository.save(new Author("Dostoyevski"));
 
-        List<Book> result = repository.findByAuthorIgnoreCase("dostoyevski");
+        Book b1 = new Book(); b1.setTitle("Suç ve Ceza"); b1.setAuthor(dostoyevski);
+        Book b2 = new Book(); b2.setTitle("Budala");      b2.setAuthor(dostoyevski);
+        repository.save(b1);
+        repository.save(b2);
+
+        List<Book> result = repository.findByAuthor(dostoyevski);
 
         assertThat(result).hasSize(2);
     }

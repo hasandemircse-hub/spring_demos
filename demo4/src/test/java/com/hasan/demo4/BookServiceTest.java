@@ -25,8 +25,10 @@ import com.hasan.demo4.clients.AuthorClient;
 import com.hasan.demo4.dto.BookRequestDto;
 import com.hasan.demo4.dto.BookResponseDto;
 import com.hasan.demo4.dto.PageResponseDto;
+import com.hasan.demo4.entities.Author;
 import com.hasan.demo4.entities.Book;
 import com.hasan.demo4.exception.ResourceNotFoundException;
+import com.hasan.demo4.repositories.AuthorRepository;
 import com.hasan.demo4.repositories.BookRepository;
 import com.hasan.demo4.services.BookService;
 import com.hasan.demo4.strategy.AuthorSortStrategy;
@@ -45,6 +47,9 @@ class BookServiceTest {
     private BookRepository repository;
 
     @Mock
+    private AuthorRepository authorRepository;
+
+    @Mock
     private AuthorClient authorClient;
 
     // @InjectMocks yerine manuel oluşturuyoruz:
@@ -54,6 +59,7 @@ class BookServiceTest {
 
     // Test verilerini burada tanımlıyoruz — her testten önce @BeforeEach ile sıfırlanır
     private Book book;
+    private Author author;
     private BookRequestDto requestDto;
 
     // @BeforeEach → her @Test metodundan ÖNCE çalışır
@@ -62,16 +68,23 @@ class BookServiceTest {
     void setUp() {
         bookService = new BookService(
             repository,
+            authorRepository,
             authorClient,
             null, // RestTemplate — Mockito mock'layamıyor, bu testlerde kullanılmıyor
             List.of(new IdSortStrategy(), new TitleSortStrategy(), new AuthorSortStrategy())
         );
 
-        book = new Book(1L, "Suç ve Ceza", "Dostoyevski");
+        author = new Author("Dostoyevski");
+        author.setId(1L);
+
+        book = new Book();
+        book.setId(1L);
+        book.setTitle("Suç ve Ceza");
+        book.setAuthor(author);
 
         requestDto = new BookRequestDto();
         requestDto.setTitle("Suç ve Ceza");
-        requestDto.setAuthor("Dostoyevski");
+        requestDto.setAuthorId(1L);
     }
 
     // @Nested → ilgili testleri bir sınıf altında gruplar
@@ -128,7 +141,7 @@ class BookServiceTest {
 
             // sadece author değil, tüm alanları kontrol et
             assertThat(result.getTitle()).isEqualTo("Suç ve Ceza");
-            assertThat(result.getAuthor()).isEqualTo("Dostoyevski");
+            assertThat(result.getAuthorName()).isEqualTo("Dostoyevski");
             assertThat(result.getId()).isEqualTo(1L);
         }
 
@@ -154,6 +167,7 @@ class BookServiceTest {
         @Test
         @DisplayName("kitap kaydedilir ve DTO döner")
         void shouldSaveAndReturnBook() {
+            when(authorRepository.findById(1L)).thenReturn(Optional.of(author));
             // any(Book.class) → repository.save() hangi Book nesnesiyle çağrılırsa çağrılsın
             // book dönsün — nesnenin tam eşitliğini kontrol etmiyoruz
             when(repository.save(any(Book.class))).thenReturn(book);
@@ -161,7 +175,7 @@ class BookServiceTest {
             BookResponseDto result = bookService.create(requestDto);
 
             assertThat(result.getTitle()).isEqualTo("Suç ve Ceza");
-            assertThat(result.getAuthor()).isEqualTo("Dostoyevski");
+            assertThat(result.getAuthorName()).isEqualTo("Dostoyevski");
             assertThat(result.getId()).isEqualTo(1L);
 
             // save() tam 1 kez çağrıldı mı?
@@ -206,24 +220,25 @@ class BookServiceTest {
         @Test
         @DisplayName("yazara göre kitap listesi döner")
         void shouldReturnBooks_byAuthor() {
-            when(repository.findByAuthorIgnoreCase("Dostoyevski"))
+            when(authorRepository.findByNameIgnoreCase("Dostoyevski"))
+                .thenReturn(Optional.of(author));
+            when(repository.findByAuthor(author))
                 .thenReturn(List.of(book));
 
             List<BookResponseDto> result = bookService.getByAuthor("Dostoyevski");
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).getAuthor()).isEqualTo("Dostoyevski");
+            assertThat(result.get(0).getAuthorName()).isEqualTo("Dostoyevski");
         }
 
         @Test
-        @DisplayName("yazar bulunamazsa boş liste döner")
-        void shouldReturnEmptyList_whenAuthorNotFound() {
-            when(repository.findByAuthorIgnoreCase("Bilinmiyor"))
-                .thenReturn(Collections.emptyList());
+        @DisplayName("yazar bulunamazsa exception fırlatır")
+        void shouldThrowException_whenAuthorNotFound() {
+            when(authorRepository.findByNameIgnoreCase("Bilinmiyor"))
+                .thenReturn(Optional.empty());
 
-            List<BookResponseDto> result = bookService.getByAuthor("Bilinmiyor");
-
-            assertThat(result).isEmpty();
+            assertThatThrownBy(() -> bookService.getByAuthor("Bilinmiyor"))
+                .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 

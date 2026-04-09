@@ -11,8 +11,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.hasan.demo4.entities.User;
 import com.hasan.demo4.repositories.UserRepository;
 import com.hasan.demo4.services.JwtService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 
-
+@Tag(name = "Auth", description = "Kullanıcı kayıt ve giriş işlemleri")
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -32,6 +35,8 @@ public class AuthController {
         this.authenticationManager = authenticationManager;
     }
 
+    @Operation(summary = "Kullanıcı kaydı")
+    @SecurityRequirements
     @PostMapping("/register")
     public String register(@RequestBody User user) {
         user.setPassword(passwordEncoder.encode(user.getPassword()));
@@ -40,6 +45,8 @@ public class AuthController {
         return "Kayıt başarılı";
     }
 
+    @Operation(summary = "Giriş yap — JWT token döner")
+    @SecurityRequirements
     @PostMapping("/login")
     public String login(@RequestBody User user) {
         authenticationManager.authenticate(

@@ -2,6 +2,7 @@ package com.hasan.demo4.services;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -23,8 +24,10 @@ import com.hasan.demo4.dto.AuthorDto;
 import com.hasan.demo4.dto.BookRequestDto;
 import com.hasan.demo4.dto.BookResponseDto;
 import com.hasan.demo4.dto.PageResponseDto;
+import com.hasan.demo4.entities.Author;
 import com.hasan.demo4.entities.Book;
 import com.hasan.demo4.exception.ResourceNotFoundException;
+import com.hasan.demo4.repositories.AuthorRepository;
 import com.hasan.demo4.repositories.BookRepository;
 import com.hasan.demo4.strategy.BookSortStrategy;
 
@@ -34,6 +37,7 @@ public class BookService {
     private static final Logger log = LoggerFactory.getLogger(BookService.class);
 
     private final BookRepository repository;
+    private final AuthorRepository authorRepository;
 
     // --- Feign Client: interface tanımla, Spring implement eder ---
     private final AuthorClient authorClient;
@@ -52,9 +56,11 @@ public class BookService {
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
 
-    public BookService(BookRepository repository, AuthorClient authorClient, RestTemplate restTemplate,
+    public BookService(BookRepository repository, AuthorRepository authorRepository,
+                       AuthorClient authorClient, RestTemplate restTemplate,
                        List<BookSortStrategy> strategies) {
         this.repository = repository;
+        this.authorRepository = authorRepository;
         this.authorClient = authorClient;
         this.restTemplate = restTemplate;
         // Her stratejinin getName() değerini anahtar olarak kullan
@@ -119,12 +125,14 @@ public class BookService {
 
         // Feign Client ile Author Service'den yazar detayını çek
         // RestTemplate'e göre fark: URL, HTTP kodu yok — sadece metod çağrısı
-        try {
-            var authorDetail = authorClient.findByName(book.getAuthor());
-            response.setAuthorDetail(authorDetail);
-            log.info("Author Service'den yazar detayı alındı: {}", book.getAuthor());
-        } catch (Exception e) {
-            log.warn("Author Service'e ulaşılamadı: {}", e.getMessage());
+        if (book.getAuthor() != null) {
+            try {
+                var authorDetail = authorClient.findByName(book.getAuthor().getName());
+                response.setAuthorDetail(authorDetail);
+                log.info("Author Service'den yazar detayı alındı: {}", book.getAuthor().getName());
+            } catch (Exception e) {
+                log.warn("Author Service'e ulaşılamadı: {}", e.getMessage());
+            }
         }
 
         return response;
@@ -136,6 +144,20 @@ public class BookService {
         Book book = toEntity(request);  // DTO → Entity
         Book saved = repository.save(book);
         return toResponse(saved);       // Entity → DTO
+    }
+
+    @Caching(evict = {
+        @CacheEvict(value = "book", key = "#id"),
+        @CacheEvict(value = {"books", "books-paged"}, allEntries = true)
+    })
+    public BookResponseDto update(Long id, BookRequestDto request) {
+        Book book = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Kitap bulunamadı: " + id));
+        Author author = authorRepository.findById(request.getAuthorId())
+                .orElseThrow(() -> new ResourceNotFoundException("Yazar bulunamadı: " + request.getAuthorId()));
+        book.setTitle(request.getTitle());
+        book.setAuthor(author);
+        return toResponse(repository.save(book));
     }
 
     // Kitap silinince: o id'nin cache'ini + liste cache'lerini temizle
@@ -176,7 +198,9 @@ public class BookService {
     }
 
     public List<BookResponseDto> getByAuthor(String name) {
-        return repository.findByAuthorIgnoreCase(name)
+        Author author = authorRepository.findByNameIgnoreCase(name)
+                .orElseThrow(() -> new ResourceNotFoundException("Yazar bulunamadı: " + name));
+        return repository.findByAuthor(author)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -186,15 +210,21 @@ public class BookService {
     private Book toEntity(BookRequestDto dto) {
         Book book = new Book();
         book.setTitle(dto.getTitle());
-        book.setAuthor(dto.getAuthor());
+        Author author = authorRepository.findById(dto.getAuthorId())
+                .orElseThrow(() -> new ResourceNotFoundException("Yazar bulunamadı: " + dto.getAuthorId()));
+        book.setAuthor(author);
         return book;
     }
 
     // Entity → DTO (DB'den gelen veriyi istemciye göndermek için)
     private BookResponseDto toResponse(Book book) {
-        // owner null olabilir (eski kayıtlar veya sahipsiz kitaplar)
         String ownerUsername = book.getOwner() != null ? book.getOwner().getUsername() : null;
-        return new BookResponseDto(book.getId(), book.getTitle(), book.getAuthor(), ownerUsername);
+        Long authorId = book.getAuthor() != null ? book.getAuthor().getId() : null;
+        String authorName = book.getAuthor() != null ? book.getAuthor().getName() : null;
+        Set<String> categoryNames = book.getCategories().stream()
+                .map(c -> c.getName())
+                .collect(Collectors.toSet());
+        return new BookResponseDto(book.getId(), book.getTitle(), authorId, authorName, ownerUsername, categoryNames);
     }
 
 

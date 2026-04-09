@@ -17,7 +17,7 @@ public class SwaggerConfig {
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
-            .info(new Info().title("Demo4 API").version("1.0"))
+            .info(new Info().title("Hasan Demir Demo4 API - SWAGGER").version("1.0"))
             .addSecurityItem(new SecurityRequirement().addList("Bearer Auth"))
             .components(new Components()
                 .addSecuritySchemes("Bearer Auth", new SecurityScheme()

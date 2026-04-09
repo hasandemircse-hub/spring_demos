@@ -26,12 +26,13 @@ export default function Login() {
             <div style={styles.card}>
                 <h2 style={styles.title}>Giriş Yap</h2>
                 {error && <p style={styles.error}>{error}</p>}
-                <form onSubmit={handleLogin}>
+                <form onSubmit={handleLogin} autoComplete="off">
                     <input
                         style={styles.input}
                         type="text"
                         placeholder="Kullanıcı Adı"
                         value={username}
+                        autoComplete="username"
                         onChange={(e) => setUsername(e.target.value)}
                     />
                     <input
@@ -39,6 +40,7 @@ export default function Login() {
                         type="password"
                         placeholder="Şifre"
                         value={password}
+                        autoComplete="current-password"
                         onChange={(e) => setPassword(e.target.value)}
                     />
                     <button style={styles.button} type="submit">Giriş Yap</button>

@@ -59,6 +59,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/**", "/h2-console/**", "/swagger-ui/**", "/v3/api-docs/**",
                         "/api/prayer-times/**").permitAll()
+                .requestMatchers("/api/users/**").hasAuthority("ADMIN")
                 .anyRequest().authenticated()
                 )
                 .headers(h -> h.frameOptions(f -> f.disable()))

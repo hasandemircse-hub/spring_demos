@@ -9,7 +9,7 @@ public class AuthorSortStrategy implements BookSortStrategy {
 
     @Override
     public Sort getSort(Sort.Direction direction) {
-        return Sort.by(direction, "author");
+        return Sort.by(direction, "author.name");
     }
 
     @Override
